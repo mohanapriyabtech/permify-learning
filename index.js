@@ -1,53 +1,39 @@
-import express from 'express';
-import permifyConfiguration from './permify';
-import { authorize } from './authorize';
+const express = require('express');
+const { PermifyConfiguration } = require('./permify'); // Import PermifyConfiguration
+const checkPermissions = require('./auth'); // Import the checkPermissions middleware
+
+// Initialize Permify Configuration
+new PermifyConfiguration();
 
 const app = express();
-app.use(express.json());
 
-// Sample middleware to simulate user authentication
-// In a real-world application, replace this with actual authentication logic
+// Custom middleware to populate userInfo
 app.use((req, res, next) => {
-    // Simulate a logged-in user by setting req.user
-    req.user = {
-        id: 'alice',  // Replace with dynamic user ID from authentication
-        roles: ['admin']  // Replace with dynamic roles based on user data
-    };
-    next();
+  req.userInfo = {
+    id: req.params.id, // Assume ID from request params, adjust as needed
+  };
+  next();
 });
 
-new permifyConfiguration();
-
-// Example: Organization routes
-app.post('/organization', authorize('organization', 'add_employee'), (req, res) => {
-    res.status(201).json({ message: 'Employee added to organization successfully!' });
+// Define routes
+app.get('/projects/:id', checkPermissions('project', 'read'), (req, res) => {
+  if (req.authorized === 'authorized') {
+    res.send('You have access to this project route');
+  } else {
+    res.status(403).send('You are not authorized to access this project');
+  }
 });
 
-app.get('/organization/:id', authorize('organization', 'read'), (req, res) => {
-    const orgId = req.params.id;
-    res.status(200).json({ message: `Details of organization ${orgId}` });
+app.get('/tasks/:id', checkPermissions('task', 'update'), (req, res) => {
+  if (req.authorized === 'authorized') {
+    res.send('You have access to this task route');
+  } else {
+    res.status(403).send('You are not authorized to access this task');
+  }
 });
 
-app.delete('/organization/:id', authorize('organization', 'delete'), (req, res) => {
-    const orgId = req.params.id;
-    res.status(200).json({ message: `Organization ${orgId} deleted successfully` });
-});
-
-// Example: Team routes
-app.post('/team', authorize('team', 'create'), (req, res) => {
-    res.status(201).json({ message: 'Team created successfully!' });
-});
-
-app.put('/team/:id', authorize('team', 'update'), (req, res) => {
-    const teamId = req.params.id;
-    res.status(200).json({ message: `Team ${teamId} updated successfully!` });
-});
-
-app.delete('/team/:id', authorize('team', 'delete'), (req, res) => {
-    const teamId = req.params.id;
-    res.status(200).json({ message: `Team ${teamId} deleted successfully!` });
-});
-
-app.listen(3002, () => {
-    console.log(`Server started at port ${3002}`);
+// Start the server
+const PORT = process.env.PORT || 3002;
+app.listen(PORT, () => {
+  console.log(`Server is running on port ${PORT}`);
 });

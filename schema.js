@@ -1,24 +1,25 @@
 const permifySchema = `
-
 entity user {}
 
-entity organization {
-    relation admin @user
-    relation owner @user
-    relation member @user
+entity project {
+    relation creator @user
+    relation manager @user
+    relation contributor @user
+    relation viewer @user
 
-    action delete = admin
-    action read = admin or owner or member
+    action delete = creator or manager
+    action update = creator or manager
+    action read = creator or manager or contributor or viewer
 }
 
-entity team {
-    relation parent @organization
+entity task {
+    relation assignedTo @user
+    relation project @project
 
-    relation technical @user @organization#member
-
-    action create = technical or parent.admin
-    action update = technical or parent.admin or parent.member
-    action delete = parent.admin
+    action create = assignedTo or project.creator or project.manager
+    action update = assignedTo or project.manager
+    action delete = assignedTo or project.manager
 }
-`
+`;
+
 export default permifySchema;

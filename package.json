@@ -3,6 +3,7 @@
     "@permify/permify-node": "^0.4.6",
     "dotenv": "^16.4.5",
     "express": "^4.19.2",
+    "jsonwebtoken": "^9.0.2",
     "morgan": "^1.10.0"
   },
   "name": "permify-rbac",

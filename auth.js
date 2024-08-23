@@ -1,14 +1,62 @@
-import jwt from 'jsonwebtoken';
+const { client } = require('./permify'); // Import the Permify client
 
-const authenticate = (req, res, next) => {
-    const token = req.headers['authorization']?.split(' ')[1]; // Bearer token
+const checkPermissions = (entityType, action) => {
+  return async (req, res, next) => {
+    try {
+      // Extract entity ID and user ID from request
+      const entityId = req.params.id; // Route parameter for the entity (e.g., project ID)
+      const userId = req.userInfo?.id; // User ID from custom middleware
 
-    if (!token) return res.status(401).json({ message: 'No token provided' });
+      // Validate entity ID and user ID
+      if (!entityId || !userId) {
+        return res.status(400).send('Entity ID or User ID is missing in the request parameters');
+      }
 
-    jwt.verify(token, 'secret', (err, decoded) => {
-        if (err) return res.status(401).json({ message: 'Failed to authenticate token' });
+      // Validate that userId matches the required pattern
+      const validIdPattern = /^[a-zA-Z0-9_\-@.:+]{1,128}$/;
+      if (!validIdPattern.test(userId)) {
+        return res.status(400).send('User ID does not match the required format');
+      }
 
-        req.user = decoded.userId; // Assume the token contains userId
+      // Prepare metadata for the permission check
+      const metadata = {
+        schemaVersion: '1',  // Ensure this matches your schema version
+        snapToken: '',       // Provide a valid snapshot token if needed
+        depth: 20,           // Adjust depth as needed
+      };
+
+      // Perform permission check with Permify
+      const checkRes = await client.permission.check({
+        tenantId: 't1',
+        metadata: metadata,
+        entity: {
+          type: entityType,  // 'project', 'task', etc.
+          id: entityId,
+        },
+        permission: action, // 'read', 'update', etc.
+        subject: {
+          type: 'user',
+          id: userId,  // Use the validated user ID
+        },
+      });
+
+      // Handle permission check result
+      if (checkRes.can === 1) {
+        req.authorized = 'authorized';
         next();
-    });
+      } else {
+        req.authorized = 'not authorized';
+        res.status(403).send('You are not authorized to access this resource');
+      }
+    } catch (err) {
+      console.error('Error checking permissions:', err.message);
+      res.status(500).send('Internal server error');
+    }
+  };
 };
+
+module.exports = checkPermissions;
+
+
+
+module.exports = checkPermissions;

@@ -1,42 +1,62 @@
-// middleware.js
+const { client } = require('./permify'); // Import the Permify client
 
-import * as permify from '@permify/permify-node';
-
-const client = new permify.grpc.newClient({ endpoint: 'localhost:3478' });
-
-export const authorize = (action) => async (req, res, next) => {
-    const userId = req.user; // Ensure this is set correctly in your request handling
-    console.log(userId,"userId")
-    const resourceId = req.query.orgId || req.params.id; // Adjust as needed for your resource identifier
-
+const checkPermissions = (entityType, action) => {
+  return async (req, res, next) => {
     try {
-        // Construct the query for Permify
-        const query = {
-            tenantId: 'tenant1',  // Adjust this as needed
-            query: {
-                entity: {
-                    type: 'user',
-                    id: userId
-                },
-                relation: action,
-                target: {
-                    type: 'organization',
-                    id: resourceId
-                }
-            }
-        };
+      // Extract entity ID and user ID from request
+      const entityId = req.params.id; // Route parameter for the entity (e.g., project ID)
+      const userId = req.userInfo?.id; // User ID from custom middleware
 
-        // Check permissions using Permify
-        const result = await client.data.read(query);
+      // Validate entity ID and user ID
+      if (!entityId || !userId) {
+        return res.status(400).send('Entity ID or User ID is missing in the request parameters');
+      }
 
-        // Check if access is granted
-        if (result.length > 0) {
-            next(); // User has access
-        } else {
-            res.status(403).json({ status_code: 403, status: false, message: 'Access denied' });
-        }
-    } catch (error) {
-        console.error('Authorization error:', error.message);
-        res.status(500).json({ status_code: 500, status: false, message: 'Internal server error' });
+      // Validate that userId matches the required pattern
+      const validIdPattern = /^[a-zA-Z0-9_\-@.:+]{1,128}$/;
+      if (!validIdPattern.test(userId)) {
+        return res.status(400).send('User ID does not match the required format');
+      }
+
+      // Prepare metadata for the permission check
+      const metadata = {
+        schemaVersion: '1',  // Ensure this matches your schema version
+        snapToken: '',       // Provide a valid snapshot token if needed
+        depth: 20,           // Adjust depth as needed
+      };
+
+      // Perform permission check with Permify
+      const checkRes = await client.permission.check({
+        tenantId: 't1',
+        metadata: metadata,
+        entity: {
+          type: entityType,  // 'project', 'task', etc.
+          id: entityId,
+        },
+        permission: action, // 'read', 'update', etc.
+        subject: {
+          type: 'user',
+          id: userId,  // Use the validated user ID
+        },
+      });
+
+      // Handle permission check result
+      if (checkRes.can === 1) {
+        req.authorized = 'authorized';
+        next();
+      } else {
+        req.authorized = 'not authorized';
+        res.status(403).send('You are not authorized to access this resource');
+      }
+    } catch (err) {
+      console.error('Error checking permissions:', err.message);
+      res.status(500).send('Internal server error');
     }
+  };
 };
+
+module.exports = checkPermissions;
+
+
+
+module.exports = checkPermissions;
